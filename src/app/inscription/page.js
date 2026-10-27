@@ -1,11 +1,9 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function Inscription() {
-  const router = useRouter()
   const [nom, setNom] = useState('')
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -38,7 +36,7 @@ export default function Inscription() {
       .maybeSingle()
 
     if (existing) {
-      setError("Ce nom d'utilisateur est déjà pris.")
+      setError("Ce nom d'utilisateur est déjà pris. Si c'est le tien, utilise « Se connecter ».")
       setLoading(false)
       return
     }
@@ -67,11 +65,11 @@ export default function Inscription() {
     }
 
     if (data.session) {
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     } else {
       setInfo('Compte créé ! Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.')
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const input =

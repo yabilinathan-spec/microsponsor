@@ -1,11 +1,9 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function Connexion() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -16,18 +14,24 @@ export default function Connexion() {
     setError('')
     setLoading(true)
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     })
 
     if (signInError) {
-      setError('Email ou mot de passe incorrect.')
+      setError(signInError.message)
       setLoading(false)
       return
     }
 
-    router.push('/dashboard')
+    if (!data.session) {
+      setError("Connexion sans session : l'email n'est peut-être pas confirmé.")
+      setLoading(false)
+      return
+    }
+
+    window.location.href = '/dashboard'
   }
 
   const input =

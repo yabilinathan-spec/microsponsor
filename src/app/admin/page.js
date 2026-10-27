@@ -1,118 +1,199 @@
 'use client'
-import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
-export default function Inscription() {
-  const router = useRouter()
-  const [nom, setNom] = useState('')
-  const [username, setUsername] = useState('')
+const ADMIN_EMAIL = 'yabilinathan813@gmail.com'
+
+export default function AdminDashboard() {
+  const [session, setSession] = useState(null)
+  const [checking, setChecking] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [info, setInfo] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [donations, setDonations] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const handleSubmit = async (e) => {
+  const isAdmin = session?.user?.email?.toLowerCase() === ADMIN_EMAIL
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setChecking(false)
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    async function fetchDonations() {
+      const { data, error } = await supabase
+        .from('donations')
+        .select('*, creators(nom_affichage, username)')
+        .order('created_at', { ascending: false })
+      if (!error) setDonations(data || [])
+      setLoading(false)
+    }
+    fetchDonations()
+  }, [isAdmin])
+
+  const handleLogin = async (e) => {
     e.preventDefault()
     setError('')
-    setInfo('')
-
-    const clean = username.toLowerCase().trim()
-    if (!/^[a-z0-9_-]{3,30}$/.test(clean)) {
-      setError("Le nom d'utilisateur doit faire 3 à 30 caractères : lettres, chiffres, _ ou -.")
-      return
-    }
-    if (password.length < 6) {
-      setError('Le mot de passe doit faire au moins 6 caractères.')
-      return
-    }
-
-    setLoading(true)
-
-    const { data: existing } = await supabase
-      .from('creators')
-      .select('id')
-      .eq('username', clean)
-      .maybeSingle()
-
-    if (existing) {
-      setError("Ce nom d'utilisateur est déjà pris.")
-      setLoading(false)
-      return
-    }
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    const { error: err } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     })
-
-    if (signUpError || !data.user) {
-      setError(signUpError?.message || "Impossible de créer le compte.")
-      setLoading(false)
-      return
-    }
-
-    const { error: insertError } = await supabase.from('creators').insert({
-      username: clean,
-      nom_affichage: nom.trim() || clean,
-      user_id: data.user.id,
-    })
-
-    if (insertError) {
-      setError('Compte créé mais profil non enregistré : ' + insertError.message)
-      setLoading(false)
-      return
-    }
-
-    if (data.session) {
-      router.push('/dashboard')
-    } else {
-      setInfo('Compte créé ! Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.')
-    }
-    setLoading(false)
+    if (err) setError(err.message)
   }
 
-  const input =
-    'w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-purple-500'
+  const logout = async () => {
+    await supabase.auth.signOut()
+  }
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+        <p className="animate-pulse">Chargement…</p>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <main className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+        <div className="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl max-w-md w-full">
+          <h1 className="text-2xl font-bold mb-2 text-center">Accès Administrateur 🔐</h1>
+          <p className="text-slate-400 text-sm mb-6 text-center">Connecte-toi avec le compte administrateur.</p>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500"
+              required
+            />
+            <input
+              type="password"
+              placeholder="Mot de passe"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500"
+              required
+            />
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-600/30"
+            >
+              Se connecter
+            </button>
+          </form>
+        </div>
+      </main>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <main className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+        <div className="bg-slate-800 border border-slate-700 p-8 rounded-2xl max-w-md w-full text-center">
+          <p className="mb-4">Accès refusé : ce compte n’est pas administrateur.</p>
+          <button onClick={logout} className="text-blue-400 font-semibold">Se déconnecter</button>
+        </div>
+      </main>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+        <p className="text-lg animate-pulse">Chargement du tableau de bord...</p>
+      </div>
+    )
+  }
+
+  const totalCollected = donations.reduce((acc, curr) => acc + Number(curr.amount), 0)
+  const totalAdminFees = donations.reduce((acc, curr) => acc + Number(curr.admin_fee), 0)
+  const totalNetCreators = donations.reduce((acc, curr) => acc + Number(curr.net_amount), 0)
 
   return (
-    <main className="min-h-screen bg-[#0b1020] text-white flex items-center justify-center p-4">
-      <div className="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl max-w-md w-full">
-        <Link href="/" className="block text-center text-purple-400 font-extrabold tracking-wide mb-4">
-          MICROSPONSOR
-        </Link>
-        <h1 className="text-2xl font-bold mb-1 text-center">Devenir créateur</h1>
-        <p className="text-slate-400 text-sm mb-6 text-center">Crée ta page et reçois des dons dès aujourd’hui.</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input className={input} placeholder="Nom affiché (ex : Muzane)" value={nom} onChange={(e) => setNom(e.target.value)} required />
+    <main className="min-h-screen bg-slate-900 text-white p-8">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
           <div>
-            <input className={input} placeholder="Nom d'utilisateur (ex : muzane)" value={username} onChange={(e) => setUsername(e.target.value)} required />
-            <p className="text-xs text-slate-500 mt-1">
-              Ton lien sera : /{username.toLowerCase().trim() || 'ton-nom'}
-            </p>
+            <h1 className="text-3xl font-bold mb-1">Tableau de bord Admin 🔐</h1>
+            <p className="text-slate-400">Suivi en temps réel de tous les dons et des commissions perçues (8%).</p>
           </div>
-          <input className={input} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input className={input} type="password" placeholder="Mot de passe (6 caractères minimum)" value={password} onChange={(e) => setPassword(e.target.value)} required />
-
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          {info && <p className="text-green-400 text-sm">{info}</p>}
-
           <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-purple-600/30"
+            onClick={logout}
+            className="bg-red-600/20 border border-red-500/50 hover:bg-red-600/30 text-red-300 px-4 py-2 rounded-xl text-sm font-medium transition-all"
           >
-            {loading ? 'Création…' : 'Créer mon compte'}
+            Se déconnecter
           </button>
-        </form>
+        </div>
 
-        <p className="text-sm text-slate-400 text-center mt-6">
-          Déjà un compte ?{' '}
-          <Link href="/connexion" className="text-purple-400 font-semibold">Se connecter</Link>
-        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
+            <p className="text-sm text-slate-400 mb-1">Total Brut Collecté</p>
+            <p className="text-3xl font-bold text-white">${totalCollected.toFixed(2)}</p>
+          </div>
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
+            <p className="text-sm text-slate-400 mb-1">Commissions Admin (8%)</p>
+            <p className="text-3xl font-bold text-yellow-400">${totalAdminFees.toFixed(2)}</p>
+          </div>
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
+            <p className="text-sm text-slate-400 mb-1">Total Net Versé aux Créateurs</p>
+            <p className="text-3xl font-bold text-green-400">${totalNetCreators.toFixed(2)}</p>
+          </div>
+        </div>
+
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
+          <div className="p-6 border-b border-slate-700">
+            <h2 className="text-xl font-bold">Historique des Transactions</h2>
+          </div>
+
+          {donations.length === 0 ? (
+            <div className="p-8 text-center text-slate-400">
+              Aucun don enregistré pour le moment.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-700/50 text-slate-400 text-sm uppercase tracking-wider">
+                    <th className="p-4">Date</th>
+                    <th className="p-4">Donateur</th>
+                    <th className="p-4">Créateur</th>
+                    <th className="p-4">Montant Brut</th>
+                    <th className="p-4">Commission (8%)</th>
+                    <th className="p-4">Net Créateur</th>
+                    <th className="p-4">Opérateur & Téléphone</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700 text-sm">
+                  {donations.map((d) => (
+                    <tr key={d.id} className="hover:bg-slate-700/30 transition-colors">
+                      <td className="p-4 text-slate-400">
+                        {new Date(d.created_at).toLocaleDateString()} {new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="p-4 font-semibold text-white">{d.donor_name}</td>
+                      <td className="p-4 text-blue-400">@{d.creators?.username || 'Inconnu'}</td>
+                      <td className="p-4 font-bold text-white">{d.amount} {d.currency}</td>
+                      <td className="p-4 text-yellow-400">-{d.admin_fee} {d.currency}</td>
+                      <td className="p-4 text-green-400 font-bold">+{d.net_amount} {d.currency}</td>
+                      <td className="p-4">
+                        <span className="bg-slate-700 px-2.5 py-1 rounded-lg text-xs font-medium mr-2">{d.operator}</span>
+                        <span className="text-slate-300">{d.phone_number}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   )
