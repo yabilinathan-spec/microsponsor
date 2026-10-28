@@ -38,7 +38,7 @@ export default function CreatorClient({ username }) {
     const totalDonated = isCustom ? parseFloat(customAmount) : parseFloat(amount)
     if (!totalDonated || totalDonated <= 0) return
 
-    // --- CALCUL DE LA COMMISSION ADMIN (8%) ---
+    // --- CALCUL DE LA COMMISSION ADMIN (invisible pour le donateur) ---
     const adminCommissionRate = 0.08
     const adminFee = totalDonated * adminCommissionRate
     const netCreatorAmount = totalDonated - adminFee
@@ -59,7 +59,7 @@ export default function CreatorClient({ username }) {
         origin: { y: 0.6 }
       })
 
-      setSuccessMessage(`Merci ! Don de ${totalDonated} ${currency} effectué (Frais admin 8%: ${adminFee.toFixed(2)} ${currency}) 🎉`)
+      setSuccessMessage(`Merci ! Don de ${totalDonated} ${currency} effectué 🎉`)
       setTimeout(() => {
         setShowDonateModal(false)
         setSuccessMessage('')
