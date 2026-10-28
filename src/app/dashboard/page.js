@@ -20,7 +20,7 @@ export default function CreatorDashboard() {
 
       const { data: c } = await supabase
         .from('creators')
-        .select('*')
+        .select('id, username, nom_affichage')
         .eq('user_id', session.user.id)
         .maybeSingle()
 
@@ -33,7 +33,7 @@ export default function CreatorDashboard() {
 
       const { data: d } = await supabase
         .from('donations')
-        .select('*')
+        .select('id, donor_name, net_amount, currency, created_at')
         .eq('creator_id', c.id)
         .order('created_at', { ascending: false })
 
@@ -118,7 +118,7 @@ export default function CreatorDashboard() {
             <p className="text-3xl font-bold">{donations.length}</p>
           </div>
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
-            <p className="text-sm text-slate-400 mb-1">Total net (après 8 %)</p>
+            <p className="text-sm text-slate-400 mb-1">Total reçu</p>
             {Object.keys(totals).length === 0 ? (
               <p className="text-3xl font-bold text-green-400">0</p>
             ) : (
