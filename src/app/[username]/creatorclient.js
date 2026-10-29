@@ -2,14 +2,28 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+// Taux approximatifs : 1 USD = X unités de la devise
+const DEVISES = {
+  USD: { nom: 'Dollar', taux: 1, choix: [0.1, 0.5, 1, 5] },
+  CDF: { nom: 'Franc congolais', taux: 2800, choix: [300, 1500, 3000, 15000] },
+  XOF: { nom: 'Franc CFA', taux: 600, choix: [100, 500, 1000, 3000] },
+  EUR: { nom: 'Euro', taux: 0.92, choix: [0.1, 0.5, 1, 5] },
+  KES: { nom: 'Shilling kényan', taux: 129, choix: [15, 65, 130, 650] },
+  GHS: { nom: 'Cedi ghanéen', taux: 11, choix: [1.5, 5, 10, 50] },
+}
+
+const OPERATEURS = ['M-Pesa', 'Airtel Money', 'Orange Money', 'Wave', 'MTN Mobile Money']
+
 export default function CreatorClient({ username }) {
   const [totalRecolte, setTotalRecolte] = useState(0)
+  const [devise, setDevise] = useState('USD')
   const [montant, setMontant] = useState(1)
+  const [showCustom, setShowCustom] = useState(false)
   const [custom, setCustom] = useState('')
+  const [operateur, setOperateur] = useState('')
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
   const objectifGoal = 500
-  const choix = [0.1, 0.5, 1, 5]
 
   async function fetchDonations() {
     const { data, error } = await supabase
@@ -27,29 +41,50 @@ export default function CreatorClient({ username }) {
   }, [username])
 
   const pourcentage = Math.min(Math.round((totalRecolte / objectifGoal) * 100), 100)
+  const d = DEVISES[devise]
+
+  const changerDevise = (code) => {
+    setDevise(code)
+    setMontant(DEVISES[code].choix[2])
+    setCustom('')
+    setShowCustom(false)
+  }
 
   const donner = async () => {
-    const valeur = custom ? Number(custom) : montant
-    if (!valeur || valeur < 0.1) {
-      setMessage('Le montant minimum est de 0,10 $.')
+    const valeurLocale = showCustom ? Number(custom) : montant
+    const enUSD = valeurLocale / d.taux
+
+    if (!valeurLocale || enUSD < 0.099) {
+      setMessage('Le montant minimum est équivalent à 0,10 $.')
       return
     }
+    if (!operateur) {
+      setMessage('Choisis un opérateur mobile.')
+      return
+    }
+
     setSending(true)
     setMessage('')
 
     const { error } = await supabase
       .from('donations')
-      .insert({ creator_username: username, amount: valeur })
+      .insert({ creator_username: username, amount: Number(enUSD.toFixed(2)) })
 
     if (error) {
       setMessage('Erreur : ' + error.message)
     } else {
       setMessage('Merci pour votre soutien ! 💜')
       setCustom('')
+      setShowCustom(false)
       fetchDonations()
     }
     setSending(false)
   }
+
+  const btn = (actif) =>
+    `py-3 rounded-xl font-bold border text-sm ${
+      actif ? 'bg-purple-600 border-purple-500' : 'bg-gray-800 border-gray-700'
+    }`
 
   return (
     <div className="min-h-screen bg-gray-950 text-white p-4 flex flex-col items-center">
@@ -67,35 +102,79 @@ export default function CreatorClient({ username }) {
           </div>
         </div>
 
-        <div className="bg-gray-900 p-6 rounded-2xl border border-gray-800 text-center space-y-4">
+        <div className="bg-gray-900 p-6 rounded-2xl border border-gray-800 text-center space-y-5">
           <p className="text-gray-300 font-medium">Soutenir {username}</p>
 
-          <div className="grid grid-cols-4 gap-2">
-            {choix.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => { setMontant(c); setCustom('') }}
-                className={`py-3 rounded-xl font-bold border ${
-                  !custom && montant === c
-                    ? 'bg-purple-600 border-purple-500'
-                    : 'bg-gray-800 border-gray-700'
-                }`}
-              >
-                ${c}
-              </button>
-            ))}
+          {/* Devise */}
+          <div>
+            <p className="text-gray-400 text-xs mb-2">Devise</p>
+            <div className="grid grid-cols-3 gap-2">
+              {Object.keys(DEVISES).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => changerDevise(code)}
+                  className={btn(devise === code)}
+                >
+                  {code}
+                </button>
+              ))}
+            </div>
+            <p className="text-gray-500 text-xs mt-1">{d.nom}</p>
           </div>
 
-          <input
-            type="number"
-            min="0.1"
-            step="0.1"
-            placeholder="Autre montant ($)"
-            value={custom}
-            onChange={(e) => setCustom(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white text-center focus:outline-none focus:border-purple-500"
-          />
+          {/* Montant */}
+          <div>
+            <p className="text-gray-400 text-xs mb-2">Montant en {devise}</p>
+            <div className="grid grid-cols-5 gap-2">
+              {d.choix.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => { setMontant(c); setShowCustom(false); setCustom('') }}
+                  className={btn(!showCustom && montant === c)}
+                >
+                  {c}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setShowCustom(!showCustom)}
+                className={btn(showCustom)}
+              >
+                +
+              </button>
+            </div>
+
+            {showCustom && (
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder={`Montant personnalisé (${devise})`}
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                className="w-full mt-3 bg-gray-800 border border-gray-700 rounded-xl p-3 text-white text-center focus:outline-none focus:border-purple-500"
+              />
+            )}
+          </div>
+
+          {/* Opérateur */}
+          <div>
+            <p className="text-gray-400 text-xs mb-2">Mobile money</p>
+            <div className="grid grid-cols-2 gap-2">
+              {OPERATEURS.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => setOperateur(o)}
+                  className={btn(operateur === o)}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <button
             type="button"
