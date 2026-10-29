@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
-// Taux approximatifs : 1 USD = X unités de la devise
 const DEVISES = {
   USD: { nom: 'Dollar', taux: 1, choix: [0.1, 0.5, 1, 5] },
   CDF: { nom: 'Franc congolais', taux: 2800, choix: [300, 1500, 3000, 15000] },
@@ -21,6 +20,7 @@ export default function CreatorClient({ username }) {
   const [showCustom, setShowCustom] = useState(false)
   const [custom, setCustom] = useState('')
   const [operateur, setOperateur] = useState('')
+  const [phone, setPhone] = useState('')
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
   const objectifGoal = 500
@@ -62,27 +62,60 @@ export default function CreatorClient({ username }) {
       setMessage('Choisis un opérateur mobile.')
       return
     }
+    if (!phone || phone.trim().length < 8) {
+      setMessage('Veuillez entrer un numéro de téléphone valide.')
+      return
+    }
 
     setSending(true)
     setMessage('')
 
-    const { error } = await supabase
-      .from('donations')
-      .insert({ creator_username: username, amount: Number(enUSD.toFixed(2)) })
+    try {
+      // 1. Déclenchement du paiement Mobile Money (API Gateway Backend)
+      const res = await fetch('/api/pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: valeurLocale,
+          currency: devise,
+          phone: phone,
+          operator: operateur,
+          creator: username,
+        }),
+      })
 
-    if (error) {
-      setMessage('Erreur : ' + error.message)
-    } else {
-      setMessage('Merci pour votre soutien ! 💜')
-      setCustom('')
-      setShowCustom(false)
-      fetchDonations()
+      const paymentResult = await res.json()
+
+      if (!res.ok || !paymentResult.success) {
+        throw new Error(paymentResult.message || 'Échec du retrait Mobile Money.')
+      }
+
+      // 2. Enregistrement du don dans Supabase
+      const { error } = await supabase.from('donations').insert({
+        creator_username: username,
+        amount: Number(enUSD.toFixed(2)),
+        phone_number: phone,
+        operator: operateur,
+      })
+
+      if (error) {
+        setMessage('Paiement réussi, mais enregistrement échoué : ' + error.message)
+      } else {
+        setMessage('Demande de retrait envoyée ! Validez le prompt/USSD sur votre téléphone. 💜')
+        setCustom('')
+        setShowCustom(false)
+        setPhone('')
+        fetchDonations()
+      }
+    } catch (err) {
+      setMessage(err.message || 'Une erreur est survenue.')
+    } finally {
+      setSending(false)
     }
-    setSending(false)
   }
 
   const btn = (actif) =>
-    `py-3 rounded-xl font-bold border text-sm ${
+    `py-3 rounded-xl font-bold border text-sm transition-colors ${
       actif ? 'bg-purple-600 border-purple-500' : 'bg-gray-800 border-gray-700'
     }`
 
@@ -131,7 +164,11 @@ export default function CreatorClient({ username }) {
                 <button
                   key={c}
                   type="button"
-                  onClick={() => { setMontant(c); setShowCustom(false); setCustom('') }}
+                  onClick={() => {
+                    setMontant(c)
+                    setShowCustom(false)
+                    setCustom('')
+                  }}
                   className={btn(!showCustom && montant === c)}
                 >
                   {c}
@@ -176,13 +213,25 @@ export default function CreatorClient({ username }) {
             </div>
           </div>
 
+          {/* Numéro de téléphone */}
+          <div>
+            <p className="text-gray-400 text-xs mb-2">Numéro de téléphone (Mobile Money)</p>
+            <input
+              type="tel"
+              placeholder="ex: +243810000000 ou 0810000000"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white text-center focus:outline-none focus:border-purple-500"
+            />
+          </div>
+
           <button
             type="button"
             onClick={donner}
             disabled={sending}
-            className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 font-bold py-3 rounded-xl"
+            className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 font-bold py-3 rounded-xl transition-colors"
           >
-            {sending ? 'Envoi…' : 'Donner'}
+            {sending ? 'Traitement en cours…' : 'Donner'}
           </button>
 
           {message && <p className="text-sm text-gray-300">{message}</p>}
