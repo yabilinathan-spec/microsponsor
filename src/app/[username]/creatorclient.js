@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import confetti from 'canvas-confetti'
 import { supabase } from '@/lib/supabase'
 
 const DEVISES = {
@@ -48,6 +49,15 @@ export default function CreatorClient({ username }) {
     setMontant(DEVISES[code].choix[2])
     setCustom('')
     setShowCustom(false)
+  }
+
+  // Effet confetti après un don réussi
+  const lancerConfettis = () => {
+    confetti({ particleCount: 150, spread: 80, origin: { y: 0.7 } })
+    setTimeout(() => {
+      confetti({ particleCount: 80, angle: 60, spread: 60, origin: { x: 0, y: 0.7 } })
+      confetti({ particleCount: 80, angle: 120, spread: 60, origin: { x: 1, y: 0.7 } })
+    }, 250)
   }
 
   const donner = async () => {
@@ -101,6 +111,7 @@ export default function CreatorClient({ username }) {
       if (error) {
         setMessage('Paiement réussi, mais enregistrement échoué : ' + error.message)
       } else {
+        lancerConfettis()
         setMessage('Demande de retrait envoyée ! Validez le prompt/USSD sur votre téléphone. 💜')
         setCustom('')
         setShowCustom(false)
