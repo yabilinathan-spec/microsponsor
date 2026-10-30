@@ -114,9 +114,21 @@ export default function AdminDashboard() {
     )
   }
 
-  const totalCollected = donations.reduce((acc, curr) => acc + Number(curr.amount), 0)
-  const totalAdminFees = donations.reduce((acc, curr) => acc + Number(curr.admin_fee), 0)
-  const totalNetCreators = donations.reduce((acc, curr) => acc + Number(curr.net_amount), 0)
+  // La commission peut être dans "admin_fee" (ancien nom) ou "commission" (nouveau nom).
+  // Si aucune des deux n'est remplie, elle est recalculée à 8 % du montant.
+  const montant = (d) => Number(d.amount ?? 0)
+  const commissionDe = (d) => {
+    const enregistree = Number(d.admin_fee ?? d.commission ?? 0)
+    return enregistree > 0 ? enregistree : Number((montant(d) * 0.08).toFixed(2))
+  }
+  const netDe = (d) => {
+    const enregistre = Number(d.net_amount ?? 0)
+    return enregistre > 0 ? enregistre : Number((montant(d) - commissionDe(d)).toFixed(2))
+  }
+
+  const totalCollected = donations.reduce((acc, curr) => acc + montant(curr), 0)
+  const totalAdminFees = donations.reduce((acc, curr) => acc + commissionDe(curr), 0)
+  const totalNetCreators = donations.reduce((acc, curr) => acc + netDe(curr), 0)
 
   return (
     <main className="min-h-screen bg-slate-900 text-white p-8">
@@ -178,11 +190,13 @@ export default function AdminDashboard() {
                       <td className="p-4 text-slate-400">
                         {new Date(d.created_at).toLocaleDateString()} {new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </td>
-                      <td className="p-4 font-semibold text-white">{d.donor_name}</td>
-                      <td className="p-4 text-blue-400">@{d.creators?.username || 'Inconnu'}</td>
-                      <td className="p-4 font-bold text-white">{d.amount} {d.currency}</td>
-                      <td className="p-4 text-yellow-400">-{d.admin_fee} {d.currency}</td>
-                      <td className="p-4 text-green-400 font-bold">+{d.net_amount} {d.currency}</td>
+                      <td className="p-4 font-semibold text-white">{d.donor_name || 'Anonyme'}</td>
+                      <td className="p-4 text-blue-400">
+                        @{d.creators?.username || d.creator_username || 'Inconnu'}
+                      </td>
+                      <td className="p-4 font-bold text-white">${montant(d).toFixed(2)}</td>
+                      <td className="p-4 text-yellow-400">-${commissionDe(d).toFixed(2)}</td>
+                      <td className="p-4 text-green-400 font-bold">+${netDe(d).toFixed(2)}</td>
                       <td className="p-4">
                         <span className="bg-slate-700 px-2.5 py-1 rounded-lg text-xs font-medium mr-2">{d.operator}</span>
                         <span className="text-slate-300">{d.phone_number}</span>
