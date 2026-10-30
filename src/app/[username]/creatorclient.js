@@ -101,9 +101,15 @@ export default function CreatorClient({ username }) {
       }
 
       // 2. Enregistrement du don dans Supabase
+      const montantUSD = Number(enUSD.toFixed(2))
+      const commission = Number((montantUSD * 0.08).toFixed(2))
+      const net = Number((montantUSD - commission).toFixed(2))
+
       const { error } = await supabase.from('donations').insert({
         creator_username: username,
-        amount: Number(enUSD.toFixed(2)),
+        amount: montantUSD,
+        commission: commission,
+        net_amount: net,
         phone_number: phone,
         operator: operateur,
       })
